@@ -114,6 +114,10 @@ extern NSString* const NIAttributedLabelLinkAttributeName; // Value is an NSText
 - (void)insertImage:(UIImage *)image atIndex:(NSInteger)index margins:(UIEdgeInsets)margins;
 - (void)insertImage:(UIImage *)image atIndex:(NSInteger)index margins:(UIEdgeInsets)margins verticalTextAlignment:(NIVerticalTextAlignment)verticalTextAlignment;
 
+- (void)insertView:(UIView *)view atIndex:(NSInteger)index;
+- (void)insertView:(UIView *)view atIndex:(NSInteger)index margins:(UIEdgeInsets)margins;
+- (void)insertView:(UIView *)view atIndex:(NSInteger)index margins:(UIEdgeInsets)margins verticalTextAlignment:(NIVerticalTextAlignment)verticalTextAlignment;
+
 - (void)invalidateAccessibleElements;
 
 @property (nonatomic, weak) IBOutlet id<NIAttributedLabelDelegate> delegate;
@@ -458,6 +462,45 @@ extern NSString* const NIAttributedLabelLinkAttributeName; // Value is an NSText
  * @param verticalTextAlignment The position of the text relative to the image.
  * @fn NIAttributedLabel::insertImage:atIndex:margins:verticalTextAlignment:
  */
+
+/** @name Adding Inline Views */
+
+/**
+ * Inserts the given view inline at the given index in the receiver's text.
+ *
+ * The view will have no margins.
+ * The view's vertical text alignment will be NIVerticalTextAlignmentBottom.
+ *
+ * @param view The view to add to the receiver.
+ * @param index The index into the receiver's text at which to insert the view.
+ * @fn NIAttributedLabel::insertView:atIndex:
+ */
+
+/**
+ * Inserts the given view inline at the given index in the receiver's text.
+ *
+ * The view's vertical text alignment will be NIVerticalTextAlignmentBottom.
+ *
+ * @param view The view to add to the receiver.
+ * @param index The index into the receiver's text at which to insert the view.
+ * @param margins The space around the view on all sides in points.
+ * @fn NIAttributedLabel::insertView:atIndex:margins:
+ */
+
+/**
+ * Inserts the given view inline at the given index in the receiver's text.
+ *
+ * @attention
+ *      Views do not currently support NIVerticalTextAlignmentTop and the receiver will fire
+ *      multiple debug assertions if you attempt to use it.
+ *
+ * @param view The view to add to the receiver.
+ * @param index The index into the receiver's text at which to insert the view.
+ * @param margins The space around the view on all sides in points.
+ * @param verticalTextAlignment The position of the text relative to the view.
+ * @fn NIAttributedLabel::insertView:atIndex:margins:verticalTextAlignment:
+ */
+
 
 /** @name Accessibility */
 

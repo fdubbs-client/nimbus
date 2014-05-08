@@ -45,10 +45,10 @@ static NSString* const kEllipsesCharacter = @"\u2026";
 
 NSString* const NIAttributedLabelLinkAttributeName = @"NIAttributedLabel:Link";
 
-// For supporting images.
-CGFloat NIImageDelegateGetAscentCallback(void* refCon);
-CGFloat NIImageDelegateGetDescentCallback(void* refCon);
-CGFloat NIImageDelegateGetWidthCallback(void* refCon);
+// For supporting inline attachment.
+CGFloat NIAttachmentDelegateGetAscentCallback(void* refCon);
+CGFloat NIAttachmentDelegateGetDescentCallback(void* refCon);
+CGFloat NIAttachmentDelegateGetWidthCallback(void* refCon);
 
 CGSize NISizeOfAttributedStringConstrainedToSize(NSAttributedString* attributedString, CGSize constraintSize, NSInteger numberOfLines) {
   if (nil == attributedString) {
@@ -94,12 +94,12 @@ CGSize NISizeOfAttributedStringConstrainedToSize(NSAttributedString* attributedS
   return CGSizeMake(NICGFloatCeil(newSize.width), NICGFloatCeil(newSize.height));
 }
 
-@interface NIAttributedLabelImage : NSObject
+#pragma mark - NIAttributedLabelAttachment defintion
 
-- (CGSize)boxSize; // imageSize + margins
+@interface NIAttributedLabelAttachment : NSObject
+- (CGSize)boxSize; // attachmentFrameSize + margins
 
 @property (nonatomic)           NSInteger     index;
-@property (nonatomic, strong)   UIImage*      image;
 @property (nonatomic)           UIEdgeInsets  margins;
 
 @property (nonatomic) NIVerticalTextAlignment verticalTextAlignment;
@@ -109,11 +109,42 @@ CGSize NISizeOfAttributedStringConstrainedToSize(NSAttributedString* attributedS
 
 @end
 
+@implementation NIAttributedLabelAttachment
+- (CGSize)boxSize
+{
+    return CGSizeZero;
+}
+
+@end
+
+@interface NIAttributedLabelImage : NIAttributedLabelAttachment
+
+@property (nonatomic, strong)   UIImage*      image;
+
+@end
+
+
+
 @implementation NIAttributedLabelImage
 
 - (CGSize)boxSize {
   return CGSizeMake(self.image.size.width + self.margins.left + self.margins.right,
                     self.image.size.height + self.margins.top + self.margins.bottom);
+}
+
+@end
+
+@interface NIAttributedLabelView : NIAttributedLabelAttachment
+
+@property (nonatomic, strong)   UIView*      view;
+
+@end
+
+@implementation NIAttributedLabelView
+
+- (CGSize)boxSize {
+    return CGSizeMake(self.view.frame.size.width + self.margins.left + self.margins.right,
+                      self.view.frame.size.height + self.margins.top + self.margins.bottom);
 }
 
 @end
@@ -139,7 +170,7 @@ CGSize NISizeOfAttributedStringConstrainedToSize(NSAttributedString* attributedS
 
 @property (nonatomic, copy) NSArray* accessibleElements;
 
-@property (nonatomic, strong) NSMutableArray *images;
+@property (nonatomic, strong) NSMutableArray *attachments;
 
 @end
 
@@ -303,7 +334,7 @@ CGSize NISizeOfAttributedStringConstrainedToSize(NSAttributedString* attributedS
     [self removeAllExplicitLinks];
 
     // Remove all images.
-    self.images = nil;
+    self.attachments = nil;
 
     // Pull any explicit links from the attributed string itself
     [self _processLinksInAttributedString:self.mutableAttributedString];
@@ -711,8 +742,8 @@ CGSize NISizeOfAttributedStringConstrainedToSize(NSAttributedString* attributedS
       CFIndex idx = CTLineGetStringIndexForPosition(line, relativePoint);
 
       NSUInteger offset = 0;
-      for (NIAttributedLabelImage *labelImage in self.images) {
-        if (labelImage.index < idx) {
+      for (NIAttributedLabelAttachment *labelAttachment in self.attachments) {
+        if (labelAttachment.index < idx) {
           offset++;
         }
       }
@@ -1066,11 +1097,11 @@ CGSize NISizeOfAttributedStringConstrainedToSize(NSAttributedString* attributedS
   [self _applyLinkStyleWithResults:self.explicitLinkLocations
                 toAttributedString:attributedString];
 
-  if (self.images.count > 0) {
+  if (self.attachments.count > 0) {
     // Sort the label images in reverse order by index so that when we add them the string's indices
     // remain relatively accurate to the original string. This is necessary because we're inserting
     // spaces into the string.
-    [self.images sortUsingComparator:^NSComparisonResult(NIAttributedLabelImage* obj1, NIAttributedLabelImage*  obj2) {
+    [self.attachments sortUsingComparator:^NSComparisonResult(NIAttributedLabelAttachment* obj1, NIAttributedLabelAttachment*  obj2) {
       if (obj1.index < obj2.index) {
         return NSOrderedDescending;
       } else if (obj1.index > obj2.index) {
@@ -1080,15 +1111,15 @@ CGSize NISizeOfAttributedStringConstrainedToSize(NSAttributedString* attributedS
       }
     }];
 
-    for (NIAttributedLabelImage *labelImage in self.images) {
+    for (NIAttributedLabelAttachment *labelAttachments in self.attachments) {
       CTRunDelegateCallbacks callbacks;
       memset(&callbacks, 0, sizeof(CTRunDelegateCallbacks));
       callbacks.version = kCTRunDelegateVersion1;
-      callbacks.getAscent = NIImageDelegateGetAscentCallback;
-      callbacks.getDescent = NIImageDelegateGetDescentCallback;
-      callbacks.getWidth = NIImageDelegateGetWidthCallback;
+      callbacks.getAscent = NIAttachmentDelegateGetAscentCallback;
+      callbacks.getDescent = NIAttachmentDelegateGetDescentCallback;
+      callbacks.getWidth = NIAttachmentDelegateGetWidthCallback;
 
-      NSUInteger index = labelImage.index;
+      NSUInteger index = labelAttachments.index;
       if (index >= attributedString.length) {
         index = attributedString.length - 1;
       }
@@ -1097,11 +1128,11 @@ CGSize NISizeOfAttributedStringConstrainedToSize(NSAttributedString* attributedS
       CTFontRef font = (__bridge CTFontRef)[attributes valueForKey:(__bridge id)kCTFontAttributeName];
 
       if (font != NULL) {
-        labelImage.fontAscent = CTFontGetAscent(font);
-        labelImage.fontDescent = CTFontGetDescent(font);
+        labelAttachments.fontAscent = CTFontGetAscent(font);
+        labelAttachments.fontDescent = CTFontGetDescent(font);
       }
 
-      CTRunDelegateRef delegate = CTRunDelegateCreate(&callbacks, (__bridge void *)labelImage);
+      CTRunDelegateRef delegate = CTRunDelegateCreate(&callbacks, (__bridge void *)labelAttachments);
 
       // If this asserts then we're not going to be able to attach the image to the label.
       NIDASSERT(NULL != delegate);
@@ -1114,7 +1145,7 @@ CGSize NISizeOfAttributedStringConstrainedToSize(NSAttributedString* attributedS
         CFRange range = CFRangeMake(0, 1);
         CFMutableAttributedStringRef spaceString = (__bridge_retained CFMutableAttributedStringRef)space;
         CFAttributedStringSetAttribute(spaceString, range, kCTRunDelegateAttributeName, delegate);
-        // Explicitly set the writing direction of this string to LTR, because in 'drawImages' we draw
+        // Explicitly set the writing direction of this string to LTR, because in 'drawAttachments' we draw
         // for LTR by drawing at offset to offset + width vs to offset - width as you would for RTL.
         CFAttributedStringSetAttribute(spaceString,
                                        range,
@@ -1123,7 +1154,7 @@ CGSize NISizeOfAttributedStringConstrainedToSize(NSAttributedString* attributedS
         CFRelease(delegate);
         CFRelease(spaceString);
 
-        [attributedString insertAttributedString:space atIndex:labelImage.index];
+        [attributedString insertAttributedString:space atIndex:labelAttachments.index];
       }
     }
   }
@@ -1140,8 +1171,8 @@ CGSize NISizeOfAttributedStringConstrainedToSize(NSAttributedString* attributedS
   return self.numberOfLines > 0 ? MIN(self.numberOfLines, CFArrayGetCount(lines)) : CFArrayGetCount(lines);
 }
 
-- (void)drawImages {
-  if (0 == self.images.count) {
+- (void)drawAttachments {
+  if (0 == self.attachments.count) {
     return;
   }
 
@@ -1173,7 +1204,7 @@ CGSize NISizeOfAttributedStringConstrainedToSize(NSAttributedString* attributedS
       if (nil == delegate) {
         continue;
       }
-      NIAttributedLabelImage* labelImage = (__bridge NIAttributedLabelImage *)CTRunDelegateGetRefCon(delegate);
+      NIAttributedLabelAttachment* labelAttachment = (__bridge NIAttributedLabelAttachment *)CTRunDelegateGetRefCon(delegate);
 
       CGFloat ascent = 0.0f;
       CGFloat descent = 0.0f;
@@ -1183,32 +1214,55 @@ CGSize NISizeOfAttributedStringConstrainedToSize(NSAttributedString* attributedS
                                                          &descent,
                                                          NULL);
 
-      CGFloat imageBoxHeight = labelImage.boxSize.height;
+      CGFloat attachmentBoxHeight = labelAttachment.boxSize.height;
 
       CGFloat xOffset = CTLineGetOffsetForStringIndex(line, CTRunGetStringRange(run).location, nil);
 
-      CGFloat imageBoxOriginY = 0.0f;
-      switch (labelImage.verticalTextAlignment) {
+      CGFloat attachmentBoxOriginY = 0.0f;
+      switch (labelAttachment.verticalTextAlignment) {
         case NIVerticalTextAlignmentTop:
-          imageBoxOriginY = lineBottomY + (lineHeight - imageBoxHeight);
+          attachmentBoxOriginY = lineBottomY + (lineHeight - attachmentBoxHeight);
           break;
         case NIVerticalTextAlignmentMiddle:
-          imageBoxOriginY = lineBottomY + (lineHeight - imageBoxHeight) / 2.f;
+          attachmentBoxOriginY = lineBottomY + (lineHeight - attachmentBoxHeight) / 2.f;
           break;
         case NIVerticalTextAlignmentBottom:
-          imageBoxOriginY = lineBottomY;
+          attachmentBoxOriginY = lineBottomY;
           break;
       }
 
-      CGRect rect = CGRectMake(lineOrigin.x + xOffset, imageBoxOriginY, width, imageBoxHeight);
-      UIEdgeInsets flippedMargins = labelImage.margins;
+      CGRect rect = CGRectMake(lineOrigin.x + xOffset, attachmentBoxOriginY, width, attachmentBoxHeight);
+      UIEdgeInsets flippedMargins = labelAttachment.margins;
       CGFloat top = flippedMargins.top;
       flippedMargins.top = flippedMargins.bottom;
       flippedMargins.bottom = top;
 
-      CGRect imageRect = UIEdgeInsetsInsetRect(rect, flippedMargins);
-      imageRect = CGRectOffset(imageRect, 0, -[self _verticalOffsetForBounds:self.bounds]);
-      CGContextDrawImage(ctx, imageRect, labelImage.image.CGImage);
+      CGRect attachmentRect = UIEdgeInsetsInsetRect(rect, flippedMargins);
+      attachmentRect = CGRectOffset(attachmentRect, 0, -[self _verticalOffsetForBounds:self.bounds]);
+        if ([labelAttachment isKindOfClass:[NIAttributedLabelImage class]]) {
+            NIAttributedLabelImage *labelImage = (NIAttributedLabelImage *)labelAttachment;
+            CGContextDrawImage(ctx, attachmentRect, labelImage.image.CGImage);
+        }
+        else if ([labelAttachment isKindOfClass:[NIAttributedLabelView class]]) {
+            NIAttributedLabelView *labelView = (NIAttributedLabelView *)labelAttachment;
+            UIView *view = labelView.view;
+            if (view.superview != nil)
+            {
+                [view removeFromSuperview];
+            }
+            
+            CGRect viewFrame = CGRectMake(attachmentRect.origin.x,
+                                          self.bounds.size.height - attachmentRect.origin.y - attachmentRect.size.height,
+                                          attachmentRect.size.width,
+                                          attachmentRect.size.height);
+            
+            
+            [view setFrame:viewFrame];
+            [self addSubview:view];
+        }
+        else {
+            NSLog(@"Unsupport type of attachment. Currently only support Image and View!");
+        }
     }
   }
 }
@@ -1358,7 +1412,7 @@ CGSize NISizeOfAttributedStringConstrainedToSize(NSAttributedString* attributedS
     CGAffineTransform transform = [self _transformForCoreText];
     CGContextConcatCTM(ctx, transform);
 
-    [self drawImages];
+    [self drawAttachments];
     [self drawHighlightWithRect:rect];
 
     if (nil != self.shadowColor) {
@@ -1486,51 +1540,58 @@ CGSize NISizeOfAttributedStringConstrainedToSize(NSAttributedString* attributedS
   [self setNeedsDisplay];
 }
 
-#pragma mark - Inline Image Support
+#pragma mark - Inline Attachment Support
 
-CGFloat NIImageDelegateGetAscentCallback(void* refCon) {
-  NIAttributedLabelImage *labelImage = (__bridge NIAttributedLabelImage *)refCon;
+CGFloat NIAttachmentDelegateGetAscentCallback(void* refCon) {
+  NIAttributedLabelAttachment *labelAttachment = (__bridge NIAttributedLabelAttachment *)refCon;
 
-  switch (labelImage.verticalTextAlignment) {
+  switch (labelAttachment.verticalTextAlignment) {
     case NIVerticalTextAlignmentMiddle:
     {
-      CGFloat ascent = labelImage.fontAscent;
-      CGFloat descent = labelImage.fontDescent;
+      CGFloat ascent = labelAttachment.fontAscent;
+      CGFloat descent = labelAttachment.fontDescent;
       CGFloat baselineFromMid = (ascent + descent) / 2 - descent;
 
-      return labelImage.boxSize.height / 2 + baselineFromMid;
+      return labelAttachment.boxSize.height / 2 + baselineFromMid;
     }
     case NIVerticalTextAlignmentTop:
-      return labelImage.fontAscent;
+      return labelAttachment.fontAscent;
     case NIVerticalTextAlignmentBottom:
     default:
-      return labelImage.boxSize.height - labelImage.fontDescent;
+      return labelAttachment.boxSize.height - labelAttachment.fontDescent;
   }
 }
 
-CGFloat NIImageDelegateGetDescentCallback(void* refCon) {
-  NIAttributedLabelImage *labelImage = (__bridge NIAttributedLabelImage *)refCon;
+CGFloat NIAttachmentDelegateGetDescentCallback(void* refCon) {
+  NIAttributedLabelAttachment *labelAttachment = (__bridge NIAttributedLabelAttachment *)refCon;
 
-  switch (labelImage.verticalTextAlignment) {
+  switch (labelAttachment.verticalTextAlignment) {
     case NIVerticalTextAlignmentMiddle:
     {
-      CGFloat ascent = labelImage.fontAscent;
-      CGFloat descent = labelImage.fontDescent;
+      CGFloat ascent = labelAttachment.fontAscent;
+      CGFloat descent = labelAttachment.fontDescent;
       CGFloat baselineFromMid = (ascent + descent) / 2 - descent;
 
-      return labelImage.boxSize.height / 2 - baselineFromMid;
+      return labelAttachment.boxSize.height / 2 - baselineFromMid;
     }
     case NIVerticalTextAlignmentTop:
-      return labelImage.boxSize.height - labelImage.fontAscent;
+      return labelAttachment.boxSize.height - labelAttachment.fontAscent;
     case NIVerticalTextAlignmentBottom:
     default:
-      return labelImage.fontDescent;
+      return labelAttachment.fontDescent;
   }
 }
 
-CGFloat NIImageDelegateGetWidthCallback(void* refCon) {
-  NIAttributedLabelImage *labelImage = (__bridge NIAttributedLabelImage *)refCon;
-  return labelImage.image.size.width + labelImage.margins.left + labelImage.margins.right;
+CGFloat NIAttachmentDelegateGetWidthCallback(void* refCon) {
+  NIAttributedLabelAttachment *labelAttachment = (__bridge NIAttributedLabelAttachment *)refCon;
+    if ([labelAttachment isKindOfClass:[NIAttributedLabelImage class]]) {
+        NIAttributedLabelImage *labelImage = (NIAttributedLabelImage *)labelAttachment;
+        return labelImage.image.size.width + labelImage.margins.left + labelImage.margins.right;
+    } else {
+        NIAttributedLabelView *labelView = (NIAttributedLabelView *)labelAttachment;
+        return labelView.view.frame.size.width + labelView.margins.left + labelView.margins.right;
+    }
+  
 }
 
 - (void)insertImage:(UIImage *)image atIndex:(NSInteger)index {
@@ -1547,10 +1608,30 @@ CGFloat NIImageDelegateGetWidthCallback(void* refCon) {
   labelImage.image = image;
   labelImage.margins = margins;
   labelImage.verticalTextAlignment = verticalTextAlignment;
-  if (nil == self.images) {
-    self.images = [NSMutableArray array];
+  if (nil == self.attachments) {
+    self.attachments = [NSMutableArray array];
   }
-  [self.images addObject:labelImage];
+  [self.attachments addObject:labelImage];
+}
+
+- (void)insertView:(UIView *)view atIndex:(NSInteger)index {
+    [self insertView:view atIndex:index margins:UIEdgeInsetsZero verticalTextAlignment:NIVerticalTextAlignmentBottom];
+}
+
+- (void)insertView:(UIView *)view atIndex:(NSInteger)index margins:(UIEdgeInsets)margins {
+    [self insertView:view atIndex:index margins:margins verticalTextAlignment:NIVerticalTextAlignmentBottom];
+}
+
+- (void)insertView:(UIView *)view atIndex:(NSInteger)index margins:(UIEdgeInsets)margins verticalTextAlignment:(NIVerticalTextAlignment)verticalTextAlignment {
+    NIAttributedLabelView* labelView = [[NIAttributedLabelView alloc] init];
+    labelView.index = index;
+    labelView.view = view;
+    labelView.margins = margins;
+    labelView.verticalTextAlignment = verticalTextAlignment;
+    if (nil == self.attachments) {
+        self.attachments = [NSMutableArray array];
+    }
+    [self.attachments addObject:labelView];
 }
 
 @end

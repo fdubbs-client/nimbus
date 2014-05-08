@@ -58,7 +58,7 @@
   NIAttributedLabel* label = [[NIAttributedLabel alloc] initWithFrame:CGRectZero];
 
   // When we assign the text we do not include any markup for the images.
-  label.text = @"This is Nimbus:He's a red panda.\nThis is a star:";
+  label.text = @"This \nis Nimbus:He's a red panda.\nThis is a star:";
 
   label.autoresizingMask = UIViewAutoresizingFlexibleDimensions;
   label.lineBreakMode = NSLineBreakByWordWrapping;
@@ -76,9 +76,19 @@
   // Experiment:
   // Try changing the values of the margins and seeing the effects it has.
   //
+    /*
   [label insertImage:[UIImage imageNamed:@"Icon"]
              atIndex:NSMaxRange(range)
              margins:UIEdgeInsetsMake(5, 5, 5, 5)];
+     */
+    UIButton *button = [UIButton buttonWithType:(UIButtonTypeSystem)];
+    CGRect frame = button.frame;
+    frame.size.width = 80;
+    frame.size.height = 20;
+    button.frame = frame;
+    [button setBackgroundColor:[UIColor redColor]];
+    [button setTitle:@"Test Button" forState:UIControlStateNormal];
+    [label insertView:button atIndex:NSMaxRange(range)];
 
   // We're going to add an image to the end of the string, so we pass the length of the string.
   // Why not length - 1? Because the image gets inserted at the given index, so if we passed
@@ -88,9 +98,18 @@
   // Try changing the index to other arbitrary values and seeing how it affects the way the text is
   // drawn.
   //
+    UIButton *button1 = [UIButton buttonWithType:(UIButtonTypeSystem)];
+    CGRect frame1 = button1.frame;
+    frame1.size.width = 80;
+    frame1.size.height = 20;
+    button1.frame = frame1;
+    [button1 setBackgroundColor:[UIColor redColor]];
+    [button1 setTitle:@"Test Button" forState:UIControlStateNormal];
+    [label insertView:button1 atIndex:label.text.length];
+    /*
   [label insertImage:[UIImage imageNamed:@"star"]
              atIndex:label.text.length
-             margins:UIEdgeInsetsMake(5, 5, 5, 5)];
+             margins:UIEdgeInsetsMake(5, 5, 5, 5)];*/
 
   [self.view addSubview:label];
 }
